@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"net"
-	"strings"
+	"os"
+	stProto "../proto"
+
+	"github.com/gogo/protobuf/proto"
 )
 
 func HandleConn(conn net.Conn) {
@@ -12,38 +15,40 @@ func HandleConn(conn net.Conn) {
 	addr := conn.RemoteAddr().String()
 	fmt.Println(addr, " connect sucessful.")
 
-	buf := make([]byte, 2049)
+	buf := make([]byte, 4096, 4096)
 	for {
-		n, err := conn.Read(buf)
+		cnt, err := conn.Read(buf)
 		if err != nil {
-			fmt.Println("err=", err)
-			return
-		}
-		fmt.Printf("[%s]: %s\n", addr, string(buf[:n]))
-		fmt.Println("len = ", len(string(buf[:n])))
-
-		if "exit" == string(buf[:n-1]) {
-			fmt.Println(addr, " exit")
-			return
+			panic(err)
 		}
 
-		conn.Write([]byte(strings.ToUpper(string(buf[:n]))))
+		stReceive := &stProto.UserInfo{}
+		pData := buf[:cnt]
+
+		//protobuf解码
+		err = proto.Unmarshal(pData, stReceive)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("receive ", conn.RemoteAddr(), stReceive)
+		if stReceive.Message == "stop" {
+			os.Exit(1)
+		}
 	}
 }
 
 func main() {
-	listener, err := net.Listen("tcp", "127.0.0.1:8005")
+	listener, err := net.Listen("tcp", "172.18.62.46:6600")
 	if err != nil {
-		fmt.Println("err=", err)
-		return
+		panic(err)
 	}
 	defer listener.Close()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("err=", err)
-			return
+			panic(err)
 		}
 		//处理用户请求，新建一个协程
 		go HandleConn(conn)
